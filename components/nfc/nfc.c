@@ -35,7 +35,7 @@
 #define ST25DV_GPO_ENABLE         (1U << 0)
 #define ST25DV_GPO_FIELD_CHANGE   (1U << 4)
 #define ST25DV_FTM_MB_MODE        (1U << 0)
-#define ST25DV_WRITE_TIMEOUT_MS   50
+#define ST25DV_WRITE_DELAY_MS     10
 #define ST25DV_READ_RETRY_COUNT   10
 #define ST25DV_NDEF_MAX_TEXT_LEN  64
 #define ST25DV_NDEF_MAX_URI_LEN   64
@@ -111,19 +111,13 @@ static esp_err_t st25dv_write_handle(i2c_master_dev_handle_t device, uint8_t dev
 
 static esp_err_t st25dv_wait_user_memory_ready(void)
 {
-    TickType_t start = xTaskGetTickCount();
-    TickType_t timeout = pdMS_TO_TICKS(ST25DV_WRITE_TIMEOUT_MS);
-    esp_err_t ret = ESP_ERR_TIMEOUT;
-
-    do {
-        ret = i2c_master_probe(s_i2c_bus, s_user_i2c_addr, 5);
-        if (ret == ESP_OK) {
-            return ESP_OK;
-        }
-        vTaskDelay(pdMS_TO_TICKS(1));
-    } while ((xTaskGetTickCount() - start) < timeout);
-
-    return ret;
+    /*
+     * ST25DV04KC单行EEPROM写入最大时间约5.5ms。
+     * ESP-IDF的地址探测在芯片写周期内可能返回总线超时，因此固定等待10ms；
+     * 最终写入结果仍由NDEF完整回读或调用方后续读取进行校验。
+     */
+    vTaskDelay(pdMS_TO_TICKS(ST25DV_WRITE_DELAY_MS));
+    return ESP_OK;
 }
 
 static esp_err_t st25dv_read_user(uint16_t mem_addr, uint8_t *data, size_t len)
